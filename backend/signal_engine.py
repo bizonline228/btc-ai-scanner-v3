@@ -1,70 +1,52 @@
-# ============================================================
-# BTC AI SCANNER V2.2
+# BTC AI SCANNER V3
 # SIGNAL ENGINE
-# ============================================================
 
+import logging
 import math
 from typing import Optional
 
-import numpy as np
-
 
 # ============================================================
-# BASIC INDICATORS
+# INDICATORS
 # ============================================================
 
 def ema(values, period):
-    values = np.asarray(values, dtype=float)
-
-    if len(values) == 0:
-        return np.array([])
-
     if len(values) < period:
-        return np.full(len(values), np.nan)
+        return None
 
-    alpha = 2.0 / (period + 1.0)
+    multiplier = 2 / (period + 1)
 
-    result = np.full(len(values), np.nan)
+    result = sum(values[:period]) / period
 
-    result[period - 1] = np.mean(values[:period])
-
-    for i in range(period, len(values)):
-        result[i] = (
-            alpha * values[i]
-            + (1.0 - alpha) * result[i - 1]
-        )
+    for price in values[period:]:
+        result = (
+            (price - result) * multiplier
+        ) + result
 
     return result
 
 
 def rsi(values, period=14):
-    """
-    RSI de Wilder.
-    Retourne une valeur entre 0 et 100.
-    """
-
-    values = np.asarray(values, dtype=float)
-
     if len(values) < period + 1:
         return None
 
-    delta = np.diff(values)
+    gains = []
+    losses = []
 
-    gains = np.where(delta > 0, delta, 0.0)
-    losses = np.where(delta < 0, -delta, 0.0)
+    for i in range(1, len(values)):
+        change = values[i] - values[i - 1]
 
-    avg_gain = np.mean(gains[:period])
-    avg_loss = np.mean(losses[:period])
+        if change > 0:
+            gains.append(change)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(change))
 
-    if avg_loss == 0:
-        return 100.0
-
-    rs = avg_gain / avg_loss
-
-    rsi_value = 100.0 - (100.0 / (1.0 + rs))
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
 
     for i in range(period, len(gains)):
-
         avg_gain = (
             (avg_gain * (period - 1))
             + gains[i]
@@ -75,160 +57,192 @@ def rsi(values, period=14):
             + losses[i]
         ) / period
 
-        if avg_loss == 0:
-            rsi_value = 100.0
-        else:
-            rs = avg_gain / avg_loss
-            rsi_value = 100.0 - (
-                100.0 / (1.0 + rs)
-            )
+    if avg_loss == 0:
+        return 100.0
 
-    return float(rsi_value)
+    rs = avg_gain / avg_loss
+
+    return 100 - (
+        100 / (1 + rs)
+    )
 
 
 def atr(candles, period=14):
     if len(candles) < period + 1:
         return None
 
-    highs = np.array(
-        [float(x["high"]) for x in candles],
-        dtype=float
-    )
+    trs = []
 
-    lows = np.array(
-        [float(x["low"]) for x in candles],
-        dtype=float
-    )
+    for i in range(1, len(candles)):
 
-    closes = np.array(
-        [float(x["close"]) for x in candles],
-        dtype=float
-    )
+        high = float(candles[i]["high"])
+        low = float(candles[i]["low"])
 
-    previous_close = closes[:-1]
+        previous_close = float(
+            candles[i - 1]["close"]
+        )
 
-    current_high = highs[1:]
-    current_low = lows[1:]
+        tr = max(
+            high - low,
+            abs(high - previous_close),
+            abs(low - previous_close)
+        )
 
-    tr1 = current_high - current_low
+        trs.append(tr)
 
-    tr2 = np.abs(
-        current_high - previous_close
-    )
-
-    tr3 = np.abs(
-        current_low - previous_close
-    )
-
-    true_range = np.maximum(
-        tr1,
-        np.maximum(tr2, tr3)
-    )
-
-    if len(true_range) < period:
+    if len(trs) < period:
         return None
 
-    atr_value = np.mean(
-        true_range[-period:]
-    )
-
-    return float(atr_value)
+    return sum(
+        trs[-period:]
+    ) / period
 
 
 def macd(values):
-    values = np.asarray(values, dtype=float)
-
     if len(values) < 35:
         return None, None, None
 
-    ema12 = ema(values, 12)
-    ema26 = ema(values, 26)
+    ema12 = []
+    ema26 = []
 
-    macd_line = ema12 - ema26
+    multiplier12 = 2 / 13
+    multiplier26 = 2 / 27
 
-    valid = macd_line[
-        ~np.isnan(macd_line)
-    ]
+    current12 = sum(values[:12]) / 12
+    current26 = sum(values[:26]) / 26
 
-    if len(valid) < 9:
+    ema12.append(current12)
+    ema26.append(current26)
+
+    for price in values[12:]:
+        current12 = (
+            (price - current12) * multiplier12
+        ) + current12
+
+        ema12.append(current12)
+
+    for price in values[26:]:
+        current26 = (
+            (price - current26) * multiplier26
+        ) + current26
+
+    length = min(
+        len(ema12),
+        len(ema26)
+    )
+
+    macd_values = []
+
+    for i in range(length):
+        macd_values.append(
+            ema12[-length + i]
+            - ema26[-length + i]
+        )
+
+    if len(macd_values) < 9:
         return None, None, None
 
-    signal_line = ema(
-        valid,
-        9
-    )
+    signal_line = sum(
+        macd_values[:9]
+    ) / 9
 
-    macd_value = float(valid[-1])
+    multiplier9 = 2 / 10
 
-    signal_value = float(
-        signal_line[-1]
-    )
+    for value in macd_values[9:]:
+        signal_line = (
+            (value - signal_line) * multiplier9
+        ) + signal_line
+
+    macd_line = macd_values[-1]
 
     histogram = (
-        macd_value - signal_value
+        macd_line - signal_line
     )
 
     return (
-        macd_value,
-        signal_value,
+        macd_line,
+        signal_line,
         histogram
     )
 
 
 # ============================================================
-# HELPERS
+# SAFE FLOAT
 # ============================================================
 
 def safe_float(value, default=0.0):
 
     try:
-        value = float(value)
 
-        if math.isnan(value):
+        if value is None:
             return default
 
-        if math.isinf(value):
+        result = float(value)
+
+        if not math.isfinite(result):
             return default
 
-        return value
+        return result
 
-    except Exception:
+    except (
+        TypeError,
+        ValueError
+    ):
+
         return default
 
 
-def calculate_slope(values, lookback=5):
+# ============================================================
+# SLOPE
+# ============================================================
 
-    if len(values) < lookback + 1:
+def calculate_slope(values, period=10):
+
+    if len(values) < period:
         return 0.0
 
-    current = float(values[-1])
-    previous = float(values[-lookback - 1])
+    start = safe_float(
+        values[-period]
+    )
 
-    if previous == 0:
+    end = safe_float(
+        values[-1]
+    )
+
+    if start == 0:
         return 0.0
 
     return (
-        (current - previous)
-        / previous
-    ) * 100.0
+        (end - start)
+        / start
+        * 100
+    )
 
 
 # ============================================================
-# RISK MANAGEMENT
+# TRADE PARAMETERS
 # ============================================================
 
 def calculate_trade_parameters(
     price,
-    atr_value,
     direction,
-    max_risk_usd,
-    risk_reward
+    atr_value,
+    max_risk_usd=2.0,
+    risk_reward=3.0
 ):
 
-    price = float(price)
-    atr_value = float(atr_value)
-    max_risk_usd = float(max_risk_usd)
-    risk_reward = float(risk_reward)
+    price = safe_float(price)
+    atr_value = safe_float(atr_value)
+
+    max_risk_usd = safe_float(
+        max_risk_usd,
+        2.0
+    )
+
+    risk_reward = safe_float(
+        risk_reward,
+        3.0
+    )
 
     if price <= 0:
         return {
@@ -255,12 +269,11 @@ def calculate_trade_parameters(
         }
 
     # --------------------------------------------------------
-    # STOP BASED ON MARKET VOLATILITY
+    # STOP DISTANCE
     # --------------------------------------------------------
 
     stop_distance = atr_value * 1.20
 
-    # Protection contre un SL trop petit
     minimum_stop = price * 0.0005
 
     stop_distance = max(
@@ -269,7 +282,47 @@ def calculate_trade_parameters(
     )
 
     # --------------------------------------------------------
-    # POSITION SIZE
+    # TARGET
+    # --------------------------------------------------------
+
+    target_distance = (
+        stop_distance
+        * risk_reward
+    )
+
+    # --------------------------------------------------------
+    # STOP / TP
+    # --------------------------------------------------------
+
+    if direction == "LONG":
+
+        stop_loss = (
+            price - stop_distance
+        )
+
+        take_profit = (
+            price + target_distance
+        )
+
+    elif direction == "SHORT":
+
+        stop_loss = (
+            price + stop_distance
+        )
+
+        take_profit = (
+            price - target_distance
+        )
+
+    else:
+
+        return {
+            "valid": False,
+            "reason": "Direction invalide"
+        }
+
+    # --------------------------------------------------------
+    # POSITION
     # --------------------------------------------------------
 
     quantity = (
@@ -282,49 +335,35 @@ def calculate_trade_parameters(
     )
 
     actual_risk = (
-        quantity * stop_distance
+        stop_distance * quantity
     )
-
-    # --------------------------------------------------------
-    # TAKE PROFIT
-    # --------------------------------------------------------
-
-    target_distance = (
-        stop_distance * risk_reward
-    )
-
-    if direction == "LONG":
-
-        stop_loss = (
-            price - stop_distance
-        )
-
-        take_profit = (
-            price + target_distance
-        )
-
-    else:
-
-        stop_loss = (
-            price + stop_distance
-        )
-
-        take_profit = (
-            price - target_distance
-        )
 
     potential_profit = (
-        actual_risk * risk_reward
+        target_distance * quantity
     )
 
     return {
+
         "valid": True,
 
-        "entry_price": price,
+        "entry_price": float(price),
 
-        "stop_loss": float(stop_loss),
+        "stop_loss": float(
+            stop_loss
+        ),
 
-        "take_profit": float(take_profit),
+        "take_profit": float(
+            take_profit
+        ),
+
+        # Compatibilité V3
+        "stop_price": float(
+            stop_loss
+        ),
+
+        "target_price": float(
+            take_profit
+        ),
 
         "stop_distance": float(
             stop_distance
@@ -352,130 +391,100 @@ def calculate_trade_parameters(
 
         "risk_reward": float(
             risk_reward
-        ),
+        )
     }
 
 
 # ============================================================
-# MAIN SIGNAL ENGINE
+# SIGNAL ENGINE
 # ============================================================
 
 def signal(
     candles,
-    bid_depth=0,
-    ask_depth=0,
-    trade_amount_usd=None,
+    bid_depth=None,
+    ask_depth=None,
     max_risk_usd=2.0,
     risk_reward=3.0
 ):
 
-    # --------------------------------------------------------
-    # BASIC VALIDATION
-    # --------------------------------------------------------
-
     if not candles:
 
         return {
-            "signal": "NO TRADE",
+            "signal": "NO SIGNAL",
+            "direction": "NO TRADE",
             "confidence": 0,
+            "score": 0,
+            "edge": 0,
             "reason": "Aucune donnée marché"
         }
 
     if len(candles) < 200:
 
         return {
-            "signal": "NO TRADE",
+            "signal": "NO SIGNAL",
+            "direction": "NO TRADE",
             "confidence": 0,
+            "score": 0,
+            "edge": 0,
             "reason": (
-                f"Historique insuffisant "
-                f"({len(candles)}/200 bougies)"
+                f"Données insuffisantes "
+                f"({len(candles)}/200)"
             )
         }
 
     # --------------------------------------------------------
-    # DATA
+    # PRICES
     # --------------------------------------------------------
 
-    closes = np.array(
-        [
-            float(x["close"])
-            for x in candles
-        ],
-        dtype=float
-    )
+    closes = [
+        safe_float(c["close"])
+        for c in candles
+    ]
 
-    highs = np.array(
-        [
-            float(x["high"])
-            for x in candles
-        ],
-        dtype=float
-    )
+    highs = [
+        safe_float(c["high"])
+        for c in candles
+    ]
 
-    lows = np.array(
-        [
-            float(x["low"])
-            for x in candles
-        ],
-        dtype=float
-    )
+    lows = [
+        safe_float(c["low"])
+        for c in candles
+    ]
 
-    price = float(closes[-1])
+    current_price = closes[-1]
 
     # --------------------------------------------------------
-    # INDICATORS
+    # EMA
     # --------------------------------------------------------
 
-    ema9_series = ema(
+    ema9 = ema(
         closes,
         9
     )
 
-    ema21_series = ema(
+    ema21 = ema(
         closes,
         21
     )
 
-    ema50_series = ema(
+    ema50 = ema(
         closes,
         50
     )
 
-    ema200_series = ema(
+    ema200 = ema(
         closes,
         200
-    )
-
-    ema9_value = float(
-        ema9_series[-1]
-    )
-
-    ema21_value = float(
-        ema21_series[-1]
-    )
-
-    ema50_value = float(
-        ema50_series[-1]
-    )
-
-    ema200_value = float(
-        ema200_series[-1]
     )
 
     # --------------------------------------------------------
     # RSI
     # --------------------------------------------------------
-    # IMPORTANT :
-    # correction du bug V2.2 :
-    # rsi(closes)
-    # et non rsi()
 
     rsi_value = rsi(
-        closes
+        closes,
+        14
     )
-
-    if rsi_value is None:
-        rsi_value = 50.0
 
     # --------------------------------------------------------
     # ATR
@@ -486,400 +495,334 @@ def signal(
         14
     )
 
-    if atr_value is None:
-
-        return {
-            "signal": "NO TRADE",
-            "confidence": 0,
-            "reason": "ATR indisponible"
-        }
-
     # --------------------------------------------------------
     # MACD
     # --------------------------------------------------------
 
-    (
-        macd_value,
-        macd_signal,
-        macd_histogram
-    ) = macd(closes)
-
-    if macd_value is None:
-
-        macd_value = 0.0
-        macd_signal = 0.0
-        macd_histogram = 0.0
+    macd_line, macd_signal, macd_hist = macd(
+        closes
+    )
 
     # --------------------------------------------------------
     # EMA SLOPE
     # --------------------------------------------------------
 
-    ema21_slope = calculate_slope(
-        ema21_series[
-            ~np.isnan(ema21_series)
-        ],
-        5
-    )
+    ema21_values = []
 
-    # --------------------------------------------------------
-    # RECENT RANGE
-    # --------------------------------------------------------
+    for i in range(
+        max(0, len(closes) - 30),
+        len(closes)
+    ):
 
-    recent_high = float(
-        np.max(highs[-10:])
-    )
+        subset = closes[:i + 1]
 
-    recent_low = float(
-        np.min(lows[-10:])
-    )
-
-    recent_range = (
-        recent_high - recent_low
-    )
-
-    if recent_range > 0:
-
-        range_position = (
-            (price - recent_low)
-            / recent_range
+        value = ema(
+            subset,
+            21
         )
 
-    else:
+        if value is not None:
+            ema21_values.append(value)
 
-        range_position = 0.5
+    ema21_slope = calculate_slope(
+        ema21_values,
+        min(
+            10,
+            len(ema21_values)
+        )
+        if ema21_values
+        else 1
+    )
 
     # --------------------------------------------------------
     # ORDER BOOK
     # --------------------------------------------------------
 
-    bid_depth = safe_float(
+    bid = safe_float(
         bid_depth
     )
 
-    ask_depth = safe_float(
+    ask = safe_float(
         ask_depth
     )
 
-    total_depth = (
-        bid_depth + ask_depth
-    )
+    total_depth = bid + ask
 
     if total_depth > 0:
 
         orderbook_ratio = (
-            bid_depth / total_depth
+            bid / total_depth
         )
 
     else:
 
         orderbook_ratio = 0.5
 
-    # ========================================================
+    # --------------------------------------------------------
+    # RECENT RANGE
+    # --------------------------------------------------------
+
+    recent_high = max(
+        highs[-20:]
+    )
+
+    recent_low = min(
+        lows[-20:]
+    )
+
+    # --------------------------------------------------------
     # SCORING
-    # ========================================================
+    # --------------------------------------------------------
 
     long_score = 0.0
     short_score = 0.0
 
-    long_confirmations = 0
-    short_confirmations = 0
+    long_confirmations = []
+    short_confirmations = []
 
-    # --------------------------------------------------------
-    # EMA STRUCTURE — 25 points
-    # --------------------------------------------------------
-
+    # EMA trend
     if (
-        ema9_value > ema21_value
-        and ema21_value > ema50_value
+        ema9 is not None
+        and ema21 is not None
+        and ema50 is not None
+        and ema200 is not None
     ):
 
-        long_score += 25
-        long_confirmations += 1
+        if (
+            ema9 > ema21
+            and ema21 > ema50
+            and ema50 > ema200
+        ):
 
-    elif (
-        ema9_value < ema21_value
-        and ema21_value < ema50_value
+            long_score += 25
+
+            long_confirmations.append(
+                "EMA trend"
+            )
+
+        elif (
+            ema9 < ema21
+            and ema21 < ema50
+            and ema50 < ema200
+        ):
+
+            short_score += 25
+
+            short_confirmations.append(
+                "EMA trend"
+            )
+
+    # RSI
+    if rsi_value is not None:
+
+        if 50 < rsi_value < 70:
+
+            long_score += 15
+
+            long_confirmations.append(
+                "RSI"
+            )
+
+        elif 30 < rsi_value < 50:
+
+            short_score += 15
+
+            short_confirmations.append(
+                "RSI"
+            )
+
+    # MACD
+    if (
+        macd_line is not None
+        and macd_signal is not None
     ):
 
-        short_score += 25
-        short_confirmations += 1
+        if macd_line > macd_signal:
 
-    else:
+            long_score += 20
 
-        if ema9_value > ema21_value:
-            long_score += 12
+            long_confirmations.append(
+                "MACD"
+            )
 
-        if ema9_value < ema21_value:
-            short_score += 12
+        elif macd_line < macd_signal:
 
-    # --------------------------------------------------------
-    # PRICE VS EMA200 — 10 points
-    # --------------------------------------------------------
+            short_score += 20
 
-    if price > ema200_value:
+            short_confirmations.append(
+                "MACD"
+            )
 
-        long_score += 10
-
-    elif price < ema200_value:
-
-        short_score += 10
-
-    # --------------------------------------------------------
-    # EMA21 SLOPE — 10 points
-    # --------------------------------------------------------
-
-    if ema21_slope > 0.015:
-
-        long_score += 10
-        long_confirmations += 1
-
-    elif ema21_slope < -0.015:
-
-        short_score += 10
-        short_confirmations += 1
-
-    # --------------------------------------------------------
-    # RSI — 10 points
-    # --------------------------------------------------------
-
-    if 52 <= rsi_value <= 68:
-
-        long_score += 10
-        long_confirmations += 1
-
-    elif 32 <= rsi_value <= 48:
-
-        short_score += 10
-        short_confirmations += 1
-
-    elif rsi_value > 50:
-
-        long_score += 5
-
-    elif rsi_value < 50:
-
-        short_score += 5
-
-    # --------------------------------------------------------
-    # MACD — 15 points
-    # --------------------------------------------------------
-
-    if macd_histogram > 0:
+    # EMA slope
+    if ema21_slope > 0.02:
 
         long_score += 15
-        long_confirmations += 1
 
-    elif macd_histogram < 0:
+        long_confirmations.append(
+            "EMA slope"
+        )
+
+    elif ema21_slope < -0.02:
 
         short_score += 15
-        short_confirmations += 1
 
-    # --------------------------------------------------------
-    # RANGE POSITION — 10 points
-    # --------------------------------------------------------
+        short_confirmations.append(
+            "EMA slope"
+        )
 
-    if range_position >= 0.65:
-
-        long_score += 10
-
-    elif range_position <= 0.35:
-
-        short_score += 10
-
-    # --------------------------------------------------------
-    # ORDER BOOK — 10 points
-    # --------------------------------------------------------
-
+    # Order book
     if orderbook_ratio > 0.55:
 
         long_score += 10
+
+        long_confirmations.append(
+            "Order book"
+        )
 
     elif orderbook_ratio < 0.45:
 
         short_score += 10
 
-    # ========================================================
-    # DETERMINE DIRECTION
-    # ========================================================
+        short_confirmations.append(
+            "Order book"
+        )
+
+    # Price position
+    if current_price > recent_high:
+
+        long_score += 15
+
+        long_confirmations.append(
+            "Breakout"
+        )
+
+    elif current_price < recent_low:
+
+        short_score += 15
+
+        short_confirmations.append(
+            "Breakdown"
+        )
+
+    # --------------------------------------------------------
+    # DIRECTION
+    # --------------------------------------------------------
+
+    if long_score > short_score:
+
+        direction = "LONG"
+
+        score = long_score
+
+        confirmations = len(
+            long_confirmations
+        )
+
+    elif short_score > long_score:
+
+        direction = "SHORT"
+
+        score = short_score
+
+        confirmations = len(
+            short_confirmations
+        )
+
+    else:
+
+        return {
+            "signal": "NO SIGNAL",
+            "direction": "NO TRADE",
+            "confidence": 0,
+            "score": 0,
+            "edge": 0,
+            "reason": "Marché neutre"
+        }
 
     edge = abs(
         long_score - short_score
     )
 
-    if long_score > short_score:
+    # --------------------------------------------------------
+    # FILTER
+    # --------------------------------------------------------
 
-        direction = "LONG"
-        score = long_score
-        opposite_score = short_score
-        confirmations = long_confirmations
-
-    elif short_score > long_score:
-
-        direction = "SHORT"
-        score = short_score
-        opposite_score = long_score
-        confirmations = short_confirmations
-
-    else:
+    if (
+        score < 70
+        or edge < 15
+        or confirmations < 3
+    ):
 
         return {
-            "signal": "NO TRADE",
-            "confidence": 0,
-            "reason": "Marché neutre",
-
-            "indicators": {
-                "ema9": ema9_value,
-                "ema21": ema21_value,
-                "ema50": ema50_value,
-                "ema200": ema200_value,
-                "rsi": rsi_value,
-                "macd": macd_value,
-                "macd_signal": macd_signal,
-                "macd_histogram": macd_histogram,
-                "atr": atr_value,
-                "ema21_slope": ema21_slope,
-            },
-
-            "long_score": long_score,
-            "short_score": short_score,
-        }
-
-    # ========================================================
-    # SIGNAL FILTERS
-    # ========================================================
-
-    if score < 70:
-
-        return {
-            "signal": "NO TRADE",
-            "confidence": round(score),
-            "reason": (
-                f"Score insuffisant : "
-                f"{score:.0f}/100"
+            "signal": "NO SIGNAL",
+            "direction": "NO TRADE",
+            "confidence": round(
+                min(score, 100)
             ),
-
-            "indicators": {
-                "ema9": ema9_value,
-                "ema21": ema21_value,
-                "ema50": ema50_value,
-                "ema200": ema200_value,
-                "rsi": rsi_value,
-                "macd": macd_value,
-                "macd_signal": macd_signal,
-                "macd_histogram": macd_histogram,
-                "atr": atr_value,
-                "ema21_slope": ema21_slope,
-            },
-
+            "score": round(score),
+            "edge": round(edge),
+            "reason": (
+                "Signal insuffisant"
+            ),
             "long_score": round(
                 long_score
             ),
-
             "short_score": round(
                 short_score
             ),
-        }
-
-    if edge < 15:
-
-        return {
-            "signal": "NO TRADE",
-            "confidence": round(score),
-            "reason": (
-                f"Edge insuffisant : "
-                f"{edge:.0f}"
-            ),
-
             "indicators": {
-                "ema9": ema9_value,
-                "ema21": ema21_value,
-                "ema50": ema50_value,
-                "ema200": ema200_value,
+                "price": current_price,
+                "ema9": ema9,
+                "ema21": ema21,
+                "ema50": ema50,
+                "ema200": ema200,
                 "rsi": rsi_value,
-                "macd": macd_value,
-                "macd_signal": macd_signal,
-                "macd_histogram": macd_histogram,
                 "atr": atr_value,
-                "ema21_slope": ema21_slope,
-            },
-
-            "long_score": round(
-                long_score
-            ),
-
-            "short_score": round(
-                short_score
-            ),
-        }
-
-    if confirmations < 3:
-
-        return {
-            "signal": "NO TRADE",
-            "confidence": round(score),
-            "reason": (
-                f"Confirmations insuffisantes : "
-                f"{confirmations}/3"
-            ),
-
-            "indicators": {
-                "ema9": ema9_value,
-                "ema21": ema21_value,
-                "ema50": ema50_value,
-                "ema200": ema200_value,
-                "rsi": rsi_value,
-                "macd": macd_value,
+                "macd": macd_line,
                 "macd_signal": macd_signal,
-                "macd_histogram": macd_histogram,
-                "atr": atr_value,
+                "macd_hist": macd_hist,
                 "ema21_slope": ema21_slope,
-            },
-
-            "long_score": round(
-                long_score
-            ),
-
-            "short_score": round(
-                short_score
-            ),
-        }
-
-    # ========================================================
-    # RISK / REWARD
-    # ========================================================
-
-    trade = calculate_trade_parameters(
-        price=price,
-        atr_value=atr_value,
-        direction=direction,
-        max_risk_usd=max_risk_usd,
-        risk_reward=risk_reward
-    )
-
-    if not trade["valid"]:
-
-        return {
-            "signal": "NO TRADE",
-            "confidence": round(score),
-            "reason": trade["reason"],
-
-            "indicators": {
-                "ema9": ema9_value,
-                "ema21": ema21_value,
-                "ema50": ema50_value,
-                "ema200": ema200_value,
-                "rsi": rsi_value,
-                "macd": macd_value,
-                "macd_signal": macd_signal,
-                "macd_histogram": macd_histogram,
-                "atr": atr_value,
-                "ema21_slope": ema21_slope,
+                "orderbook_ratio": orderbook_ratio
             }
         }
 
-    # ========================================================
-    # FINAL ENTRY WINDOW
-    # ========================================================
+    # --------------------------------------------------------
+    # TRADE PARAMETERS
+    # --------------------------------------------------------
+
+    trade = calculate_trade_parameters(
+
+        current_price,
+
+        direction,
+
+        atr_value,
+
+        max_risk_usd,
+
+        risk_reward
+
+    )
+
+    if not trade.get(
+        "valid"
+    ):
+
+        return {
+            "signal": "NO SIGNAL",
+            "direction": "NO TRADE",
+            "confidence": 0,
+            "score": round(score),
+            "edge": round(edge),
+            "reason": trade.get(
+                "reason",
+                "Trade invalide"
+            )
+        }
+
+    # --------------------------------------------------------
+    # FINAL SIGNAL
+    # --------------------------------------------------------
 
     return {
 
@@ -898,13 +841,9 @@ def signal(
         "confirmations": confirmations,
 
         "reason": (
-            f"{direction} confirmé "
-            f"avec {confirmations} confirmations"
+            f"{direction} confirmé avec "
+            f"{confirmations} confirmations"
         ),
-
-        # ----------------------------------------------------
-        # PRICE
-        # ----------------------------------------------------
 
         "entry_price": trade[
             "entry_price"
@@ -918,9 +857,14 @@ def signal(
             "take_profit"
         ],
 
-        # ----------------------------------------------------
-        # RISK
-        # ----------------------------------------------------
+        # Compatibilité avec main.py
+        "stop_price": trade[
+            "stop_price"
+        ],
+
+        "target_price": trade[
+            "target_price"
+        ],
 
         "max_risk_usd": float(
             max_risk_usd
@@ -938,10 +882,6 @@ def signal(
             "risk_reward"
         ],
 
-        # ----------------------------------------------------
-        # POSITION
-        # ----------------------------------------------------
-
         "position_quantity": trade[
             "position_quantity"
         ],
@@ -958,40 +898,33 @@ def signal(
             "target_distance"
         ],
 
-        # ----------------------------------------------------
-        # INDICATORS
-        # ----------------------------------------------------
-
         "indicators": {
 
-            "ema9": ema9_value,
+            "price": current_price,
 
-            "ema21": ema21_value,
+            "ema9": ema9,
 
-            "ema50": ema50_value,
+            "ema21": ema21,
 
-            "ema200": ema200_value,
+            "ema50": ema50,
+
+            "ema200": ema200,
 
             "rsi": rsi_value,
 
-            "macd": macd_value,
+            "atr": atr_value,
+
+            "macd": macd_line,
 
             "macd_signal": macd_signal,
 
-            "macd_histogram": macd_histogram,
-
-            "atr": atr_value,
+            "macd_hist": macd_hist,
 
             "ema21_slope": ema21_slope,
 
-            "range_position": range_position,
+            "orderbook_ratio": orderbook_ratio
 
-            "orderbook_ratio": orderbook_ratio,
         },
-
-        # ----------------------------------------------------
-        # SCORES
-        # ----------------------------------------------------
 
         "long_score": round(
             long_score
@@ -999,5 +932,6 @@ def signal(
 
         "short_score": round(
             short_score
-        ),
+        )
+
     }

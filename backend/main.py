@@ -299,6 +299,34 @@ def cooldown_active():
 
 def open_trade(sig):
 
+    # --------------------------------------------------------
+    # COMPATIBILITE DES NOMS
+    # --------------------------------------------------------
+
+    stop_price = sig.get(
+        "stop_price"
+    )
+
+    if stop_price is None:
+
+        stop_price = sig.get(
+            "stop_loss"
+        )
+
+    target_price = sig.get(
+        "target_price"
+    )
+
+    if target_price is None:
+
+        target_price = sig.get(
+            "take_profit"
+        )
+
+    # --------------------------------------------------------
+    # TRADE
+    # --------------------------------------------------------
+
     trade = {
 
         "id": state["next_id"],
@@ -311,13 +339,13 @@ def open_trade(sig):
             "entry_price"
         ),
 
-        "stop_price": sig.get(
-            "stop_price"
-        ),
+        "stop_price": stop_price,
 
-        "target_price": sig.get(
-            "target_price"
-        ),
+        "target_price": target_price,
+
+        "stop_loss": stop_price,
+
+        "take_profit": target_price,
 
         "opened_at": now_iso(),
 
@@ -374,21 +402,73 @@ def open_trade(sig):
 
     }
 
+    # --------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------
+
+    if (
+        trade["entry_price"] is None
+        or trade["stop_price"] is None
+        or trade["target_price"] is None
+    ):
+
+        logging.error(
+            "TRADE REFUSEE : paramètres incomplets | "
+            "entry=%s stop=%s target=%s",
+
+            trade["entry_price"],
+            trade["stop_price"],
+            trade["target_price"]
+        )
+
+        return None
+
+    try:
+
+        trade["entry_price"] = float(
+            trade["entry_price"]
+        )
+
+        trade["stop_price"] = float(
+            trade["stop_price"]
+        )
+
+        trade["target_price"] = float(
+            trade["target_price"]
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        logging.error(
+            "TRADE REFUSEE : prix invalides"
+        )
+
+        return None
+
+    # --------------------------------------------------------
+    # ID
+    # --------------------------------------------------------
+
     state["next_id"] += 1
 
     state["active_trade"] = trade
 
     logging.info(
         "TRADE #%s OPEN %s @ %.2f | "
-        "risk=%.2f | RR=1:%.1f",
+        "SL=%.2f | TP=%.2f | risk=%.2f | RR=1:%.1f",
 
         trade["id"],
 
         trade["direction"],
 
-        float(
-            trade["entry_price"] or 0
-        ),
+        trade["entry_price"],
+
+        trade["stop_price"],
+
+        trade["target_price"],
 
         float(
             trade["actual_risk_usd"] or 0
@@ -537,26 +617,95 @@ def monitor_active():
     if market.last_price is None:
         return None
 
-    p = float(
-        market.last_price
+    # --------------------------------------------------------
+    # SECURITE
+    # --------------------------------------------------------
+
+    stop_price = trade.get(
+        "stop_price"
     )
+
+    target_price = trade.get(
+        "target_price"
+    )
+
+    if stop_price is None:
+
+        logging.error(
+            "ACTIVE TRADE INVALID: stop_price=None"
+        )
+
+        return None
+
+    if target_price is None:
+
+        logging.error(
+            "ACTIVE TRADE INVALID: target_price=None"
+        )
+
+        return None
+
+    try:
+
+        p = float(
+            market.last_price
+        )
+
+        stop_price = float(
+            stop_price
+        )
+
+        target_price = float(
+            target_price
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        logging.error(
+            "ACTIVE TRADE INVALID: prix non numériques"
+        )
+
+        return None
 
     direction = trade["direction"]
 
+    # --------------------------------------------------------
+    # LONG
+    # --------------------------------------------------------
+
     if direction == "LONG":
 
-        if p <= float(
-            trade["stop_price"]
-        ):
+        if p <= stop_price:
 
             return close_trade(
                 "STOP LOSS",
                 p
             )
 
-        if p >= float(
-            trade["target_price"]
-        ):
+        if p >= target_price:
+
+            return close_trade(
+                "TAKE PROFIT",
+                p
+            )
+
+    # --------------------------------------------------------
+    # SHORT
+    # --------------------------------------------------------
+
+    elif direction == "SHORT":
+
+        if p >= stop_price:
+
+            return close_trade(
+                "STOP LOSS",
+                p
+            )
+
+        if p <= target_price:
 
             return close_trade(
                 "TAKE PROFIT",
@@ -565,23 +714,16 @@ def monitor_active():
 
     else:
 
-        if p >= float(
-            trade["stop_price"]
-        ):
+        logging.error(
+            "ACTIVE TRADE INVALID: direction=%s",
+            direction
+        )
 
-            return close_trade(
-                "STOP LOSS",
-                p
-            )
+        return None
 
-        if p <= float(
-            trade["target_price"]
-        ):
-
-            return close_trade(
-                "TAKE PROFIT",
-                p
-            )
+    # --------------------------------------------------------
+    # TIME EXIT
+    # --------------------------------------------------------
 
     planned = trade.get(
         "planned_exit"
@@ -670,10 +812,6 @@ def confirmed_signal(base):
 
 def build_payload():
 
-    # --------------------------------------------------------
-    # SIGNAL ENGINE
-    # --------------------------------------------------------
-
     candles = list(
         market.candles
     )
@@ -738,6 +876,14 @@ def build_payload():
                 "target_price"
             ],
 
+            "stop_loss": active[
+                "stop_price"
+            ],
+
+            "take_profit": active[
+                "target_price"
+            ],
+
             "exit_time": active[
                 "planned_exit"
             ],
@@ -796,16 +942,7 @@ def build_payload():
         return payload
 
     # --------------------------------------------------------
-    # NO ENTRY WINDOW
-    #
-    # IMPORTANT:
-    # signal_engine.py returns:
-    #
-    #     "signal": "ENTRY WINDOW"
-    #
-    # NOT:
-    #
-    #     "status": "ENTRY WINDOW"
+    # ENTRY WINDOW
     # --------------------------------------------------------
 
     if base.get(
@@ -856,6 +993,35 @@ def build_payload():
     state["candidate_direction"] = None
 
     state["candidate_since"] = None
+
+    # --------------------------------------------------------
+    # TRADE REFUSE
+    # --------------------------------------------------------
+
+    if active is None:
+
+        payload = dict(base)
+
+        payload.update({
+
+            "direction": "NO TRADE",
+
+            "status": "TRADE REFUSED",
+
+            "reason": (
+                "Trade refusé : "
+                "paramètres SL/TP invalides."
+            ),
+
+            "active_trade": None
+
+        })
+
+        return payload
+
+    # --------------------------------------------------------
+    # TRADE ACTIVE
+    # --------------------------------------------------------
 
     payload = dict(base)
 
@@ -959,7 +1125,13 @@ app = FastAPI(
 async def style_css():
 
     return FileResponse(
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "style.css"),
+        os.path.join(
+            os.path.dirname(
+                os.path.dirname(__file__)
+            ),
+            "frontend",
+            "style.css"
+        ),
         media_type="text/css"
     )
 
@@ -968,7 +1140,13 @@ async def style_css():
 async def app_js():
 
     return FileResponse(
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "app.js"),
+        os.path.join(
+            os.path.dirname(
+                os.path.dirname(__file__)
+            ),
+            "frontend",
+            "app.js"
+        ),
         media_type="application/javascript"
     )
 
@@ -981,7 +1159,13 @@ async def app_js():
 async def root():
 
     return FileResponse(
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "index.html")
+        os.path.join(
+            os.path.dirname(
+                os.path.dirname(__file__)
+            ),
+            "frontend",
+            "index.html"
+        )
     )
 
 
@@ -991,7 +1175,11 @@ async def root():
 
 @app.get("/healthz")
 async def healthz():
-    return {"status": "ok", "service": "btc-ai-scanner-v3"}
+
+    return {
+        "status": "ok",
+        "service": "btc-ai-scanner-v3"
+    }
 
 
 @app.get("/api/status")
@@ -1064,19 +1252,11 @@ async def update_settings(
             "error": "Paramètres invalides."
         }
 
-    # --------------------------------------------------------
-    # RISK
-    # --------------------------------------------------------
-
     if max_risk <= 0:
 
         return {
             "error": "Risque invalide."
         }
-
-    # --------------------------------------------------------
-    # RR
-    # --------------------------------------------------------
 
     allowed_rr = [
         1.0,
@@ -1092,10 +1272,6 @@ async def update_settings(
         return {
             "error": "Ratio Risk/Reward invalide."
         }
-
-    # --------------------------------------------------------
-    # SAVE
-    # --------------------------------------------------------
 
     settings["max_risk_usd"] = max_risk
 
