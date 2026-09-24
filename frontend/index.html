@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>BTC AI Scanner V3</title>
+
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <header class="header">
+        <div>
+            <h1>BTC AI Scanner</h1>
+            <p>Analyse Bitcoin en temps réel — Paper Trading</p>
+        </div>
+
+        <div id="connectionStatus" class="status offline">
+            ● Déconnexion
+        </div>
+    </header>
+
+
+    <!-- PARAMÈTRES -->
+    <section class="card settings-card">
+
+        <h2>⚙️ Paramètres de trading</h2>
+
+        <div class="settings-grid">
+
+            <div class="setting">
+                <label for="riskInput">
+                    Risque maximum ($)
+                </label>
+
+                <input
+                    id="riskInput"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value="2"
+                >
+            </div>
+
+
+            <div class="setting">
+                <label for="rrInput">
+                    Risk / Reward
+                </label>
+
+                <select id="rrInput">
+
+                    <option value="1">1:1</option>
+
+                    <option value="1.5">
+                        1:1.5
+                    </option>
+
+                    <option value="2">
+                        1:2
+                    </option>
+
+                    <option value="2.5">
+                        1:2.5
+                    </option>
+
+                    <option value="3" selected>
+                        1:3
+                    </option>
+
+                    <option value="4">
+                        1:4
+                    </option>
+
+                </select>
+            </div>
+
+        </div>
+
+
+        <button id="applySettings">
+            APPLIQUER LES PARAMÈTRES
+        </button>
+
+
+        <div
+            id="settingsMessage"
+            class="settings-message">
+        </div>
+
+    </section>
+
+
+    <!-- SIGNAL PRINCIPAL -->
+    <section class="card signal-card">
+
+        <div class="signal-header">
+
+            <div>
+                <span class="label">
+                    Signal
+                </span>
+
+                <div
+                    id="direction"
+                    class="direction neutral">
+                    —
+                </div>
+            </div>
+
+
+            <div class="confidence-box">
+
+                <span class="label">
+                    Confiance
+                </span>
+
+                <strong id="confidence">
+                    0%
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div
+            id="signalMessage"
+            class="signal-message">
+            Initialisation du scanner...
+        </div>
+
+    </section>
+
+
+    <!-- TRADE -->
+    <section class="card">
+
+        <h2>Trade actuel</h2>
+
+
+        <div class="trade-grid">
+
+            <div class="metric">
+                <span>Entrée</span>
+                <strong id="entryPrice">—</strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Prix</span>
+                <strong id="currentPrice">—</strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Stop</span>
+                <strong id="stopPrice">—</strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Take Profit</span>
+                <strong id="targetPrice">—</strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Sortie estimée</span>
+                <strong id="estimatedExit">—</strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Durée</span>
+                <strong id="duration">—</strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Risque</span>
+                <strong id="riskAmount">
+                    2.00 $
+                </strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Gain potentiel</span>
+                <strong id="potentialProfit">
+                    6.00 $
+                </strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Position</span>
+                <strong id="positionSize">
+                    —
+                </strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Quantité BTC</span>
+                <strong id="btcQuantity">
+                    —
+                </strong>
+            </div>
+
+
+            <div class="metric">
+                <span>Ratio</span>
+                <strong id="riskReward">
+                    1:3
+                </strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ANALYSE -->
+    <section class="card">
+
+        <h2>Analyse</h2>
+
+        <div
+            id="analysis"
+            class="analysis">
+            —
+        </div>
+
+    </section>
+
+
+    <!-- INDICATEURS -->
+    <section class="card">
+
+        <h2>Indicateurs</h2>
+
+        <div class="indicators-grid">
+
+            <div class="indicator">
+                <span>EMA9</span>
+                <strong id="ema9">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>EMA21</span>
+                <strong id="ema21">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>EMA50</span>
+                <strong id="ema50">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>EMA200</span>
+                <strong id="ema200">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>RSI</span>
+                <strong id="rsi">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>MACD</span>
+                <strong id="macd">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>ATR</span>
+                <strong id="atr">—</strong>
+            </div>
+
+
+            <div class="indicator">
+                <span>Order Book</span>
+                <strong id="orderBook">—</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- HISTORIQUE -->
+    <section class="card">
+
+        <div class="section-header">
+
+            <h2>📊 Historique & Résultats</h2>
+
+            <button
+                id="refreshHistory"
+                class="secondary-button">
+                Actualiser
+            </button>
+
+        </div>
+
+
+        <div class="stats-grid">
+
+            <div class="stat">
+                <span>Total trades</span>
+                <strong id="totalTrades">0</strong>
+            </div>
+
+
+            <div class="stat">
+                <span>Gagnants</span>
+                <strong id="wins">0</strong>
+            </div>
+
+
+            <div class="stat">
+                <span>Pertes</span>
+                <strong id="losses">0</strong>
+            </div>
+
+
+            <div class="stat">
+                <span>Win rate</span>
+                <strong id="winRate">0%</strong>
+            </div>
+
+
+            <div class="stat">
+                <span>P&amp;L</span>
+                <strong id="totalPnl">0.00 $</strong>
+            </div>
+
+        </div>
+
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>ID</th>
+                        <th>Direction</th>
+                        <th>Entrée</th>
+                        <th>Sortie</th>
+                        <th>Résultat</th>
+                        <th>P&amp;L</th>
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="historyBody">
+
+                    <tr>
+                        <td
+                            colspan="6"
+                            class="empty">
+                            Aucun trade enregistré.
+                        </td>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <footer>
+        Paper trading uniquement.
+        Aucun ordre réel n'est envoyé.
+        Les résultats passés ne garantissent pas les résultats futurs.
+    </footer>
+
+</div>
+
+
+<script src="/app.js"></script>
+
+</body>
+</html>
