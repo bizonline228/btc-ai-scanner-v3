@@ -1,5 +1,5 @@
 // ============================================================
-// BTC AI SCANNER V2.2
+// BTC AI SCANNER V3
 // FRONTEND
 // ============================================================
 
@@ -117,71 +117,542 @@ const refreshHistory =
 
 
 // ============================================================
+// PROBABLE TRADE PANEL
+// ============================================================
+
+let probableTradePanel = null;
+
+
+// ============================================================
+// CREATE PROBABLE TRADE PANEL
+// ============================================================
+
+function createProbableTradePanel() {
+
+    if (probableTradePanel) {
+        return probableTradePanel;
+    }
+
+    probableTradePanel =
+        document.createElement("div");
+
+    probableTradePanel.id =
+        "probableTradePanel";
+
+    probableTradePanel.style.display =
+        "none";
+
+    probableTradePanel.style.margin =
+        "15px 0";
+
+    probableTradePanel.style.padding =
+        "18px";
+
+    probableTradePanel.style.border =
+        "1px solid rgba(255, 193, 7, 0.45)";
+
+    probableTradePanel.style.borderRadius =
+        "14px";
+
+    probableTradePanel.style.background =
+        "rgba(255, 193, 7, 0.08)";
+
+    probableTradePanel.style.boxShadow =
+        "0 8px 30px rgba(0,0,0,0.15)";
+
+    probableTradePanel.innerHTML = `
+
+        <div style="
+            font-size:18px;
+            font-weight:700;
+            margin-bottom:14px;
+        ">
+            🟡 TRADE PROBABLE
+        </div>
+
+        <div
+            id="probableWindow"
+            style="
+                font-size:15px;
+                margin-bottom:14px;
+            "
+        >
+            Dans ~2–5 min
+        </div>
+
+        <div style="
+            display:grid;
+            grid-template-columns:
+                repeat(auto-fit,minmax(130px,1fr));
+            gap:10px;
+        ">
+
+            <div>
+                <small>Direction</small>
+                <div
+                    id="probableDirection"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>Probabilité</small>
+                <div
+                    id="probableProbability"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>Prix actuel</small>
+                <div
+                    id="probableCurrentPrice"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>Entrée estimée</small>
+                <div
+                    id="probableEntry"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>Stop Loss</small>
+                <div
+                    id="probableStop"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>Take Profit</small>
+                <div
+                    id="probableTarget"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>LONG</small>
+                <div
+                    id="probableLongScore"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>SHORT</small>
+                <div
+                    id="probableShortScore"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+            <div>
+                <small>Confirmations</small>
+                <div
+                    id="probableConfirmations"
+                    style="font-weight:700;"
+                >
+                    —
+                </div>
+            </div>
+
+        </div>
+
+        <div
+            id="probableReason"
+            style="
+                margin-top:14px;
+                font-size:13px;
+                opacity:.85;
+            "
+        >
+            —
+        </div>
+
+    `;
+
+    /*
+     * On place le panneau avant le message
+     * principal du signal.
+     */
+
+    if (signalMessage) {
+
+        signalMessage.parentNode.insertBefore(
+            probableTradePanel,
+            signalMessage
+        );
+
+    } else {
+
+        document.body.prepend(
+            probableTradePanel
+        );
+    }
+
+    return probableTradePanel;
+}
+
+
+// ============================================================
+// UPDATE PROBABLE TRADE PANEL
+// ============================================================
+
+function updateProbableTrade(
+    data
+) {
+
+    const panel =
+        createProbableTradePanel();
+
+    if (!data) {
+
+        panel.style.display =
+            "none";
+
+        return;
+    }
+
+    const isProbable =
+        data.probable_trade === true ||
+        data.status === "TRADE PROBABLE";
+
+    if (!isProbable) {
+
+        panel.style.display =
+            "none";
+
+        return;
+    }
+
+    panel.style.display =
+        "block";
+
+
+    const directionValue =
+        String(
+            data.direction ||
+            "—"
+        ).toUpperCase();
+
+
+    const probability =
+        data.probability ??
+        data.confidence ??
+        0;
+
+
+    const current =
+        data.price ??
+        data.current_price;
+
+
+    const entry =
+        data.entry_price ??
+        current;
+
+
+    const stop =
+        data.stop_price ??
+        data.stop_loss;
+
+
+    const target =
+        data.target_price ??
+        data.take_profit;
+
+
+    const longScore =
+        data.long_score ??
+        0;
+
+
+    const shortScore =
+        data.short_score ??
+        0;
+
+
+    const confirmations =
+        data.confirmations ??
+        0;
+
+
+    const windowText =
+        data.probable_window ||
+        "~2–5 min";
+
+
+    setText(
+        document.getElementById(
+            "probableWindow"
+        ),
+        "Dans " + windowText
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableDirection"
+        ),
+        directionValue
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableProbability"
+        ),
+        formatPercent(
+            probability
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableCurrentPrice"
+        ),
+        formatUSD(
+            current
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableEntry"
+        ),
+        formatUSD(
+            entry
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableStop"
+        ),
+        formatUSD(
+            stop
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableTarget"
+        ),
+        formatUSD(
+            target
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableLongScore"
+        ),
+        formatNumber(
+            longScore,
+            0
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableShortScore"
+        ),
+        formatNumber(
+            shortScore,
+            0
+        )
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableConfirmations"
+        ),
+        confirmations
+    );
+
+
+    setText(
+        document.getElementById(
+            "probableReason"
+        ),
+        data.reason ||
+        "Configuration favorable en attente de confirmation."
+    );
+
+
+    const directionElement =
+        document.getElementById(
+            "probableDirection"
+        );
+
+
+    if (directionElement) {
+
+        directionElement.style.fontWeight =
+            "700";
+
+        if (directionValue === "LONG") {
+
+            directionElement.style.color =
+                "#22c55e";
+
+        } else if (
+            directionValue === "SHORT"
+        ) {
+
+            directionElement.style.color =
+                "#ef4444";
+
+        } else {
+
+            directionElement.style.color =
+                "inherit";
+        }
+    }
+}
+
+
+// ============================================================
+// HIDE PROBABLE TRADE
+// ============================================================
+
+function hideProbableTrade() {
+
+    if (!probableTradePanel) {
+        return;
+    }
+
+    probableTradePanel.style.display =
+        "none";
+}
+
+
+// ============================================================
 // HELPERS
 // ============================================================
 
-function formatNumber(value, decimals = 2) {
+function formatNumber(
+    value,
+    decimals = 2
+) {
 
     if (
         value === null ||
         value === undefined ||
         value === "" ||
-        !Number.isFinite(Number(value))
+        !Number.isFinite(
+            Number(value)
+        )
     ) {
+
         return "—";
     }
 
-    return Number(value).toLocaleString(
+    return Number(
+        value
+    ).toLocaleString(
         "en-US",
         {
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals
+            minimumFractionDigits:
+                decimals,
+
+            maximumFractionDigits:
+                decimals
         }
     );
 }
 
 
-function formatUSD(value, decimals = 2) {
+function formatUSD(
+    value,
+    decimals = 2
+) {
 
     if (
         value === null ||
         value === undefined ||
         value === "" ||
-        !Number.isFinite(Number(value))
+        !Number.isFinite(
+            Number(value)
+        )
     ) {
+
         return "—";
     }
 
     return (
-        formatNumber(value, decimals) +
+        formatNumber(
+            value,
+            decimals
+        ) +
         " $"
     );
 }
 
 
-function formatBTC(value) {
+function formatBTC(
+    value
+) {
 
     if (
         value === null ||
         value === undefined ||
         value === "" ||
-        !Number.isFinite(Number(value))
+        !Number.isFinite(
+            Number(value)
+        )
     ) {
+
         return "—";
     }
 
-    return Number(value).toFixed(6);
+    return Number(
+        value
+    ).toFixed(6);
 }
 
 
-function formatPercent(value) {
+function formatPercent(
+    value
+) {
 
     if (
         value === null ||
         value === undefined ||
         value === "" ||
-        !Number.isFinite(Number(value))
+        !Number.isFinite(
+            Number(value)
+        )
     ) {
+
         return "0%";
     }
 
@@ -192,11 +663,19 @@ function formatPercent(value) {
 }
 
 
-function getRatioText(value) {
+function getRatioText(
+    value
+) {
 
-    const number = Number(value);
+    const number =
+        Number(value);
 
-    if (!Number.isFinite(number)) {
+    if (
+        !Number.isFinite(
+            number
+        )
+    ) {
+
         return "1:3";
     }
 
@@ -204,9 +683,13 @@ function getRatioText(value) {
 }
 
 
-function setText(element, value) {
+function setText(
+    element,
+    value
+) {
 
     if (element) {
+
         element.textContent =
             value === null ||
             value === undefined ||
@@ -226,9 +709,12 @@ async function loadSettings() {
     try {
 
         const response =
-            await fetch("/api/settings");
+            await fetch(
+                "/api/settings"
+            );
 
         if (!response.ok) {
+
             throw new Error(
                 "Impossible de charger les paramètres."
             );
@@ -279,7 +765,6 @@ async function loadSettings() {
             "SETTINGS LOAD ERROR:",
             error
         );
-
     }
 }
 
@@ -287,14 +772,20 @@ async function loadSettings() {
 async function saveSettings() {
 
     const maxRisk =
-        Number(riskInput.value);
+        Number(
+            riskInput.value
+        );
 
     const rr =
-        Number(rrInput.value);
+        Number(
+            rrInput.value
+        );
 
 
     if (
-        !Number.isFinite(maxRisk) ||
+        !Number.isFinite(
+            maxRisk
+        ) ||
         maxRisk <= 0
     ) {
 
@@ -315,7 +806,11 @@ async function saveSettings() {
     ];
 
 
-    if (!allowedRR.includes(rr)) {
+    if (
+        !allowedRR.includes(
+            rr
+        )
+    ) {
 
         settingsMessage.textContent =
             "Risk / Reward invalide.";
@@ -324,7 +819,8 @@ async function saveSettings() {
     }
 
 
-    applySettings.disabled = true;
+    applySettings.disabled =
+        true;
 
     settingsMessage.textContent =
         "Application...";
@@ -336,20 +832,24 @@ async function saveSettings() {
             await fetch(
                 "/api/settings",
                 {
-                    method: "POST",
+                    method:
+                        "POST",
 
                     headers: {
                         "Content-Type":
                             "application/json"
                     },
 
-                    body: JSON.stringify({
-                        max_risk_usd:
-                            maxRisk,
+                    body:
+                        JSON.stringify({
 
-                        risk_reward:
-                            rr
-                    })
+                            max_risk_usd:
+                                maxRisk,
+
+                            risk_reward:
+                                rr
+
+                        })
                 }
             );
 
@@ -391,7 +891,8 @@ async function saveSettings() {
 
     } finally {
 
-        applySettings.disabled = false;
+        applySettings.disabled =
+            false;
     }
 }
 
@@ -412,6 +913,7 @@ function updateRiskPreview(
         !Number.isFinite(r) ||
         !Number.isFinite(ratio)
     ) {
+
         return;
     }
 
@@ -432,7 +934,9 @@ function updateRiskPreview(
 
     setText(
         riskReward,
-        getRatioText(ratio)
+        getRatioText(
+            ratio
+        )
     );
 }
 
@@ -483,6 +987,7 @@ function setConnection(
 ) {
 
     if (!connectionStatus) {
+
         return;
     }
 
@@ -521,9 +1026,10 @@ function connectWebSocket() {
     if (socket) {
 
         try {
-            socket.close();
-        } catch (_) {}
 
+            socket.close();
+
+        } catch (_) {}
     }
 
 
@@ -547,7 +1053,9 @@ function connectWebSocket() {
 
 
     socket =
-        new WebSocket(wsUrl);
+        new WebSocket(
+            wsUrl
+        );
 
 
     socket.onopen = () => {
@@ -556,7 +1064,10 @@ function connectWebSocket() {
             "WebSocket connecté."
         );
 
-        setConnection(true);
+        setConnection(
+            true
+        );
+
 
         if (reconnectTimer) {
 
@@ -564,7 +1075,8 @@ function connectWebSocket() {
                 reconnectTimer
             );
 
-            reconnectTimer = null;
+            reconnectTimer =
+                null;
         }
     };
 
@@ -591,7 +1103,6 @@ function connectWebSocket() {
                 "WS DATA ERROR:",
                 error
             );
-
         }
     };
 
@@ -605,7 +1116,9 @@ function connectWebSocket() {
             error
         );
 
-        setConnection(false);
+        setConnection(
+            false
+        );
     };
 
 
@@ -615,7 +1128,9 @@ function connectWebSocket() {
             "WebSocket fermé."
         );
 
-        setConnection(false);
+        setConnection(
+            false
+        );
 
 
         if (!reconnectTimer) {
@@ -641,17 +1156,19 @@ function connectWebSocket() {
 // SCANNER UPDATE
 // ============================================================
 
-function updateScanner(data) {
+function updateScanner(
+    data
+) {
 
     if (!data) {
+
         return;
     }
 
 
     /*
-     * Certaines versions du backend
-     * peuvent envoyer les informations
-     * directement ou dans "signal".
+     * Le backend V3 envoie directement
+     * les informations du signal.
      */
 
     const signal =
@@ -672,6 +1189,25 @@ function updateScanner(data) {
 
 
     // --------------------------------------------------------
+    // TRADE PROBABLE
+    // --------------------------------------------------------
+
+    if (
+        data.probable_trade === true ||
+        data.status === "TRADE PROBABLE"
+    ) {
+
+        updateProbableTrade(
+            data
+        );
+
+    } else {
+
+        hideProbableTrade();
+    }
+
+
+    // --------------------------------------------------------
     // PRIX
     // --------------------------------------------------------
 
@@ -682,9 +1218,10 @@ function updateScanner(data) {
 
         setText(
             currentPrice,
-            formatUSD(price)
+            formatUSD(
+                price
+            )
         );
-
     }
 
 
@@ -706,30 +1243,35 @@ function updateScanner(data) {
     );
 
 
-    direction.classList.remove(
-        "long",
-        "short",
-        "neutral"
-    );
+    if (direction) {
 
-
-    if (dir === "LONG") {
-
-        direction.classList.add(
-            "long"
-        );
-
-    } else if (dir === "SHORT") {
-
-        direction.classList.add(
-            "short"
-        );
-
-    } else {
-
-        direction.classList.add(
+        direction.classList.remove(
+            "long",
+            "short",
             "neutral"
         );
+
+
+        if (dir === "LONG") {
+
+            direction.classList.add(
+                "long"
+            );
+
+        } else if (
+            dir === "SHORT"
+        ) {
+
+            direction.classList.add(
+                "short"
+            );
+
+        } else {
+
+            direction.classList.add(
+                "neutral"
+            );
+        }
     }
 
 
@@ -746,7 +1288,9 @@ function updateScanner(data) {
 
     setText(
         confidence,
-        formatPercent(conf)
+        formatPercent(
+            conf
+        )
     );
 
 
@@ -794,9 +1338,15 @@ function updateScanner(data) {
 
     let analysisText =
         "LONG " +
-        formatNumber(longScore, 0) +
+        formatNumber(
+            longScore,
+            0
+        ) +
         " · SHORT " +
-        formatNumber(shortScore, 0);
+        formatNumber(
+            shortScore,
+            0
+        );
 
 
     if (confirmations) {
@@ -808,11 +1358,12 @@ function updateScanner(data) {
     }
 
 
-    if (signal.confirmed) {
+    if (
+        signal.confirmed
+    ) {
 
         analysisText +=
-            " · LONG confirmé";
-
+            " · Signal confirmé";
     }
 
 
@@ -871,7 +1422,9 @@ function updateScanner(data) {
     setText(
         rsi,
         Number.isFinite(
-            Number(indicators.rsi)
+            Number(
+                indicators.rsi
+            )
         )
             ? Number(
                 indicators.rsi
@@ -883,7 +1436,9 @@ function updateScanner(data) {
     setText(
         macd,
         Number.isFinite(
-            Number(indicators.macd)
+            Number(
+                indicators.macd
+            )
         )
             ? Number(
                 indicators.macd
@@ -910,7 +1465,9 @@ function updateScanner(data) {
     setText(
         orderBook,
         Number.isFinite(
-            Number(orderRatio)
+            Number(
+                orderRatio
+            )
         )
             ? Number(
                 orderRatio
@@ -947,6 +1504,8 @@ function updateScanner(data) {
 
     if (trade) {
 
+        hideProbableTrade();
+
         updateActiveTrade(
             trade
         );
@@ -954,6 +1513,42 @@ function updateScanner(data) {
     } else {
 
         resetActiveTrade();
+    }
+
+
+    // --------------------------------------------------------
+    // STATUS SPECIAL
+    // --------------------------------------------------------
+
+    if (
+        data.status === "ENTRY WINDOW"
+    ) {
+
+        hideProbableTrade();
+    }
+
+
+    if (
+        data.status === "CONFIRMING"
+    ) {
+
+        hideProbableTrade();
+    }
+
+
+    if (
+        data.status === "TRADE ACTIVE"
+    ) {
+
+        hideProbableTrade();
+    }
+
+
+    if (
+        data.status === "COOLDOWN"
+    ) {
+
+        hideProbableTrade();
     }
 }
 
@@ -979,7 +1574,8 @@ function updateActiveTrade(
         stopPrice,
         formatUSD(
             trade.stop_price ??
-            trade.stopPrice
+            trade.stopPrice ??
+            trade.stop_loss
         )
     );
 
@@ -988,7 +1584,8 @@ function updateActiveTrade(
         targetPrice,
         formatUSD(
             trade.target_price ??
-            trade.targetPrice
+            trade.targetPrice ??
+            trade.take_profit
         )
     );
 
@@ -1004,7 +1601,8 @@ function updateActiveTrade(
     setText(
         duration,
         trade.hold_minutes !== undefined
-            ? trade.hold_minutes + " min"
+            ? trade.hold_minutes +
+              " min"
             : "—"
     );
 
@@ -1055,7 +1653,8 @@ function updateActiveTrade(
 
 
     if (
-        trade.current_price !== undefined
+        trade.current_price !==
+        undefined
     ) {
 
         setText(
@@ -1103,12 +1702,6 @@ function resetActiveTrade() {
         "—"
     );
 
-
-    /*
-     * Même lorsqu'il n'y a pas de trade actif,
-     * le risque choisi et le gain potentiel
-     * restent affichés.
-     */
 
     const risk =
         Number(
@@ -1167,20 +1760,6 @@ async function loadHistory() {
             await response.json();
 
 
-        /*
-         * Le backend peut envoyer :
-         *
-         * [
-         *   {...}
-         * ]
-         *
-         * ou
-         *
-         * {
-         *   history: [...]
-         * }
-         */
-
         let history =
             Array.isArray(data)
                 ? data
@@ -1202,7 +1781,6 @@ async function loadHistory() {
             "HISTORY ERROR:",
             error
         );
-
     }
 }
 
@@ -1211,7 +1789,12 @@ function updateHistory(
     history
 ) {
 
-    if (!Array.isArray(history)) {
+    if (
+        !Array.isArray(
+            history
+        )
+    ) {
+
         history = [];
     }
 
@@ -1221,7 +1804,9 @@ function updateHistory(
 
 
     let winCount = 0;
+
     let lossCount = 0;
+
     let pnl = 0;
 
 
@@ -1262,7 +1847,9 @@ function updateHistory(
 
 
             if (
-                Number.isFinite(value)
+                Number.isFinite(
+                    value
+                )
             ) {
 
                 pnl += value;
@@ -1302,24 +1889,33 @@ function updateHistory(
 
     setText(
         winRate,
-        rate.toFixed(1) + "%"
+        rate.toFixed(1) +
+        "%"
     );
 
 
     setText(
         totalPnl,
-        formatUSD(pnl)
+        formatUSD(
+            pnl
+        )
     );
 
 
-    historyBody.innerHTML = "";
+    historyBody.innerHTML =
+        "";
 
 
-    if (history.length === 0) {
+    if (
+        history.length === 0
+    ) {
 
         historyBody.innerHTML = `
             <tr>
-                <td colspan="6" class="empty">
+                <td
+                    colspan="6"
+                    class="empty"
+                >
                     Aucun trade enregistré.
                 </td>
             </tr>
@@ -1328,10 +1924,6 @@ function updateHistory(
         return;
     }
 
-
-    /*
-     * Plus récent en premier.
-     */
 
     const sorted =
         [...history].reverse();
@@ -1384,7 +1976,8 @@ function updateHistory(
                 );
 
 
-            let pnlText = "—";
+            let pnlText =
+                "—";
 
 
             if (
@@ -1406,29 +1999,40 @@ function updateHistory(
                     #${escapeHtml(id)}
                 </td>
 
-                <td class="${dir.toLowerCase()}">
+                <td
+                    class="${dir.toLowerCase()}"
+                >
                     ${escapeHtml(dir)}
                 </td>
 
                 <td>
                     ${escapeHtml(
-                        formatUSD(entry)
+                        formatUSD(
+                            entry
+                        )
                     )}
                 </td>
 
                 <td>
                     ${escapeHtml(
-                        formatUSD(exit)
+                        formatUSD(
+                            exit
+                        )
                     )}
                 </td>
 
                 <td>
-                    ${escapeHtml(result)}
+                    ${escapeHtml(
+                        result
+                    )}
                 </td>
 
                 <td>
-                    ${escapeHtml(pnlText)}
+                    ${escapeHtml(
+                        pnlText
+                    )}
                 </td>
+
             `;
 
 
@@ -1449,22 +2053,27 @@ function escapeHtml(
 ) {
 
     return String(value)
+
         .replace(
             /&/g,
             "&amp;"
         )
+
         .replace(
             /</g,
             "&lt;"
         )
+
         .replace(
             />/g,
             "&gt;"
         )
+
         .replace(
             /"/g,
             "&quot;"
         )
+
         .replace(
             /'/g,
             "&#039;"
@@ -1487,6 +2096,15 @@ refreshHistory.addEventListener(
 // ============================================================
 
 async function init() {
+
+    /*
+     * Création immédiate du panneau.
+     * Il restera invisible jusqu'à ce
+     * qu'un trade probable soit détecté.
+     */
+
+    createProbableTradePanel();
+
 
     await loadSettings();
 
